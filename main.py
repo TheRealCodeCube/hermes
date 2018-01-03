@@ -68,12 +68,21 @@ class LabeledField(ColumnObject):
         curses.curs_set(0)
         super().blur()
         
+class Label(ColumnObject):
+    def __init__(self, parent, y, column, column_span, num_columns, text):
+        super().__init__(parent, y, column, column_span, num_columns)
+        self.text = text
+    
+    def draw(self, window):
+        window.addstr(self.y, self.x, self.text)
+        
 class ScrollBox(ColumnObject):
-    def __init__(self, parent, y, height, column, column_span, num_columns, values):
+    def __init__(self, parent, y, height, column, column_span, num_columns, label, values):
         super().__init__(parent, y, column, column_span, num_columns)
         self.h = height
         self.index = 0
         self.scroll = 0
+        self.label = label
         self.values = values
         
     def draw(self, window):
@@ -82,26 +91,53 @@ class ScrollBox(ColumnObject):
             self.scroll = vl - self.h
         if(self.scroll < 0):
             self.scroll = 0
-        iw = self.w
-        if(vl > self.h):
-            iw -= 1
+        iw = self.w - 1
         for i in range(0, min(self.h, vl)):
-            window.addstr(self.y + i, self.x, pad(self.values[i+self.scroll], iw), [curses.A_NORMAL, curses.A_REVERSE][i+self.scroll==self.index])
+            window.addstr(self.y + i + 1, self.x, pad(self.values[i+self.scroll], iw), [curses.A_REVERSE, curses.A_NORMAL][i+self.scroll==self.index])
+        window.addstr(self.y, self.x, pad(self.label, self.w), curses.A_REVERSE)
+        window.addstr(self.y+1, self.x+self.w-1, '^', [curses.A_NORMAL, curses.A_REVERSE][self.scroll>0])
+        window.addstr(self.y+self.h, self.x+self.w-1, 'v', [curses.A_NORMAL, curses.A_REVERSE][self.scroll<vl-self.h])
+    
+    def scroll_to(self, index):
+        if(type(index) != int):
+            try:
+                index = self.values.index(index)
+            except:
+                return
+        if(index < 0):
+            index = 0
+        if(index > len(self.values)-1):
+            index = len(self.values)-1
+        if(self.scroll > index):
+            self.scroll = index
+        if(self.scroll < index - self.h + 1):
+            self.scroll = index - self.h + 1
+        self.index = index
+    
+    def key_pressed(self, key_code):
+        super().key_pressed(key_code)
+        if(key_code == 'KEY_DOWN'):
+            self.scroll_to(self.index + 1)
+        elif(key_code == 'KEY_UP'):
+            self.scroll_to(self.index - 1)
         
 class View(CursesObject):
     def __init__(self, parent=None, y=0, x=0, height=0, width=0):
         super().__init__(parent)
         self.children = []
+        if(parent is not None):
+            x += parent.x
+            y += parent.y
         self.x, self.y = x, y
         self.w, self.h = width, height
         if(self.h == 0):
             if(parent is None):
-                self.h = curses.LINES
+                self.h = curses.LINES - y
             else:
                 self.h = parent.h - y
         if(self.w == 0):
             if(parent is None):
-                self.w = curses.COLS
+                self.w = curses.COLS - x
             else:
                 self.w = parent.w - x
         if(parent is None):
@@ -144,8 +180,9 @@ def clear_focus():
 
 def construct_method_view(parent):
     method_view = View(parent)
-    methods = ScrollBox(method_view, 0, 5, 0, 1, 1, ('1', '2', '3', '4', '5'))
-    return method_view    
+    methods = ScrollBox(method_view, 0, 5, 0, 1, 3, 'METHODS', ('[D]ELETE', '[G]ET', '[H]EAD', '[O]PTIONS', 'P[A]TCH', '[P]OST', 'PU[T]'))
+    focus_on(methods)
+    return method_view
    
 def main(screen):
     global defaultWindow, focused
@@ -162,11 +199,11 @@ def main(screen):
     query = LabeledField(home_view, 2, 1, 1, 3, '[Q]UERY', '0 parameters')
     body = LabeledField(home_view, 2, 2, 1, 3, '[B]ODY', 'N/A')
     
-    sub_view = MultiView(root_view, 4, 0)
+    sub_view = View(root_view, 4)
     method_view = construct_method_view(sub_view)
-    sub_view.change_shown(method_view)
+#    sub_view.change_shown(method_view)
     
-    focus_on(home_view)
+#    focus_on(home_view)
     
     while True:
         screen.clear()
