@@ -1,4 +1,6 @@
 import curses
+import requests as req
+import time
    
 def pad(text, width):
     l = len(text)
@@ -179,6 +181,7 @@ class ScrollBox(ColumnObject):
             self.scroll_to(self.index + 1)
         elif(key_code == 'KEY_UP'):
             self.scroll_to(self.index - 1)
+        return True
         
 class View(CursesObject):
     def __init__(self, parent=None, y=0, x=0, height=0, width=0):
